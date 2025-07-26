@@ -1,0 +1,9 @@
+provider_installation {
+  filesystem_mirror {
+    path    = "$HOME/terraform/providers"
+    include = ["shakiel.com/*/*"]
+  }
+  direct {
+    exclude = ["shakiel.com/*/*"]
+  }
+}

@@ -5,6 +5,10 @@ terraform {
       source  = "hashicorp/local"
       version = "2.5.3"
     }
+    observability = {
+      source  = "shakiel.com/providers/observability"
+      version = "1.0.0"
+    }
   }
 }
 
@@ -14,6 +18,13 @@ data "local_file" "example" {
   filename = "${path.module}/example.txt"
 }
 
-output "file_content" {
-  value = data.local_file.example.content
+provider "observability" {
+  endpoint = data.local_file.example.content
+}
+
+resource "observability_example" "example" {
+}
+
+output "example" {
+  value = observability_example.example.id
 }
