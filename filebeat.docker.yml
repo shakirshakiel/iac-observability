@@ -1,0 +1,12 @@
+filebeat.config:
+  modules:
+    path: ${path.config}/modules.d/*.yml
+    reload.enabled: false
+
+filebeat.inputs:
+  - type: filestream
+    paths:
+      - /var/log/elasticapm/*.log
+
+output.elasticsearch:
+  hosts: 'elasticsearch:9200'

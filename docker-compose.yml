@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.0
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.17.0
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+
+  elastic-apm-server:
+    image: docker.elastic.co/apm/apm-server:7.10.2
+    user: root
+    command: [ "--strict.perms=false" ]
+    volumes:
+      - ./apm-server.docker.yml:/usr/share/apm-server/apm-server.yml
+    ports:
+      - "8200:8200"
+    depends_on:
+      - elasticsearch
+
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:7.17.0
+    user: root
+    command: [ "--strict.perms=false" ]
+    volumes:
+      - ./filebeat.docker.yml:/usr/share/filebeat/filebeat.yml
+      - ./function-app:/var/log/elasticapm
+    ports:
+      - "5044:5044"
+    depends_on:
+      - elasticsearch
+
+volumes:
+  elasticsearch-data:
