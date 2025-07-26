@@ -6,12 +6,15 @@ package provider
 import (
 	"context"
 	"net/http"
+	"os"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"go.elastic.co/apm/module/apmhttp"
 )
 
 var _ provider.Provider = &ObservabilityProvider{}
@@ -41,7 +44,7 @@ func (o *ObservabilityProvider) Schema(ctx context.Context, req provider.SchemaR
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
 			"endpoint": schema.StringAttribute{
-				MarkdownDescription: "The endpoint of the observability provider",
+				MarkdownDescription: "The endpoint of the APM server (e.g., http://localhost:8200)",
 				Optional:            true,
 			},
 		},
@@ -57,7 +60,12 @@ func (o *ObservabilityProvider) Configure(ctx context.Context, req provider.Conf
 		return
 	}
 
-	client := http.DefaultClient
+	// Set APM server URL if provided
+	if !data.Endpoint.IsNull() && !data.Endpoint.IsUnknown() {
+		os.Setenv("ELASTIC_APM_SERVER_URL", data.Endpoint.ValueString())
+	}
+
+	client := apmhttp.WrapClient(http.DefaultClient)
 	resp.DataSourceData = client
 	resp.ResourceData = client
 }

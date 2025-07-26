@@ -7,6 +7,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -15,6 +17,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"go.elastic.co/apm/v2"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -88,12 +91,42 @@ func (r *ExampleResource) Configure(ctx context.Context, req resource.ConfigureR
 }
 
 func (r *ExampleResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	// Set environment variables for better APM configuration
+	os.Setenv("ELASTIC_APM_LOG_LEVEL", "info")
+	os.Setenv("ELASTIC_APM_ENVIRONMENT", "development")
+
+	// Configure APM tracer with proper settings and timeout handling
+	tracer, err := apm.NewTracer("observability", "1.0.0")
+	if err != nil {
+		resp.Diagnostics.AddError("Error creating tracer", err.Error())
+		return
+	}
+	defer tracer.Close()
+
+	// Set tracer options for better reliability
+	tracer.SetMaxSpans(1000)
+
+	// Start transaction with timeout context
+	transactionCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	transaction := tracer.StartTransaction("ExampleResource.Create", "request")
+	defer transaction.End()
+
+	ctx = apm.ContextWithTransaction(transactionCtx, transaction)
+
+	// Create a span for the operation
+	span, ctx := apm.StartSpan(ctx, "ExampleResource.Create", "provider")
+	defer span.End()
+
 	var data ExampleResourceModel
 
 	// Read Terraform plan data into the model
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 
 	if resp.Diagnostics.HasError() {
+		transaction.Result = "error"
+		transaction.Context.SetLabel("error", "plan_validation_failed")
 		return
 	}
 
@@ -111,10 +144,23 @@ func (r *ExampleResource) Create(ctx context.Context, req resource.CreateRequest
 
 	// Write logs using the tflog package
 	// Documentation: https://terraform.io/plugin/log
-	tflog.Trace(ctx, "created a resource")
+	tflog.Info(ctx, "created a resource")
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+
+	if resp.Diagnostics.HasError() {
+		transaction.Result = "error"
+		transaction.Context.SetLabel("error", "state_save_failed")
+		return
+	}
+
+	// Set transaction result and labels
+	transaction.Result = "success"
+	transaction.Context.SetLabel("resource", "example")
+	transaction.Context.SetLabel("resource_id", data.Id.ValueString())
+
+	tflog.Info(ctx, "successfully created resource with APM tracing")
 }
 
 func (r *ExampleResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {

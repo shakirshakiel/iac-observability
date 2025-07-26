@@ -1,0 +1,4 @@
+azure-functions
+elastic-apm
+requests
+structlog
